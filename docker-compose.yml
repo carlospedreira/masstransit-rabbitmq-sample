@@ -1,0 +1,10 @@
+services:
+  web:
+    build: src
+    depends_on:
+      - rabbitmq
+  rabbitmq:
+    image: "masstransit/rabbitmq:latest"
+    ports:
+      - "15672:15672"
+      - "5672:5672"
