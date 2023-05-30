@@ -1,58 +1,43 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Hosting;
 using MassTransit;
-using Microsoft.Extensions.DependencyInjection;
+using GettingStarted;
 
-namespace GettingStarted
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddMassTransit(x =>
 {
-    public class Program
+    x.SetKebabCaseEndpointNameFormatter();
+
+    // By default, sagas are in-memory, but should be changed to a durable
+    // saga repository.
+    x.SetInMemorySagaRepositoryProvider();
+
+    var entryAssembly = Assembly.GetEntryAssembly();
+
+    x.AddConsumers(entryAssembly);
+    x.AddSagaStateMachines(entryAssembly);
+    x.AddSagas(entryAssembly);
+    x.AddActivities(entryAssembly);
+
+    // x.UsingInMemory((context, cfg) =>
+    // {
+    //     cfg.ConfigureEndpoints(context);
+    // });
+
+    x.UsingRabbitMq((context, config) =>
     {
-        public static async Task Main(string[] args)
+        config.Host("rabbitmq", "/", rabbitMqHostConfigurator =>
         {
-            await CreateHostBuilder(args).Build().RunAsync();
-        }
+            rabbitMqHostConfigurator.Username("guest");
+            rabbitMqHostConfigurator.Password("guest");
+        });
 
-        public static IHostBuilder CreateHostBuilder(string[] args) =>
-            Host.CreateDefaultBuilder(args)
-                .ConfigureServices((hostContext, services) =>
-                {
-                    services.AddMassTransit(x =>
-                    {
-                        x.SetKebabCaseEndpointNameFormatter();
+        config.ConfigureEndpoints(context);
+    });
+});
 
-                        // By default, sagas are in-memory, but should be changed to a durable
-                        // saga repository.
-                        x.SetInMemorySagaRepositoryProvider();
+builder.Services.AddHostedService<Worker>();
 
-                        var entryAssembly = Assembly.GetEntryAssembly();
+var app = builder.Build();
 
-                        x.AddConsumers(entryAssembly);
-                        x.AddSagaStateMachines(entryAssembly);
-                        x.AddSagas(entryAssembly);
-                        x.AddActivities(entryAssembly);
-
-                        // x.UsingInMemory((context, cfg) =>
-                        // {
-                        //     cfg.ConfigureEndpoints(context);
-                        // });
-                        
-                        x.UsingRabbitMq((context, config) =>
-                        {
-                            config.Host("rabbitmq", "/", rabbitMqHostConfigurator =>
-                            {
-                                rabbitMqHostConfigurator.Username("guest");
-                                rabbitMqHostConfigurator.Password("guest");
-                            });
-                            
-                            config.ConfigureEndpoints(context);
-                        });
-                    });
-
-                    services.AddHostedService<Worker>();
-                });
-    }
-}
+await app.RunAsync();
